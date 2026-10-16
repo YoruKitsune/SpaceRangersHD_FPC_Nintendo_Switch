@@ -230,12 +230,13 @@ def build_switch(config: BuildConfig, rebuild: bool) -> Path:
         if obsolete.resolve() != response_path.resolve():
             obsolete.unlink()
     nacp = binary / "Rangers.nacp"
+    icon = ROOT / "platform/switch/icon.jpg"
     stamp = BuildStamp(work / "package.stamp")
     package_signature = json.dumps(
         [
             PACKAGE_VERSION,
             content_state(
-                [elf, Path(__file__), sdk / "tools/bin/elf2nro", sdk / "tools/bin/nacptool"]
+                [elf, icon, Path(__file__), sdk / "tools/bin/elf2nro", sdk / "tools/bin/nacptool"]
             ),
         ]
     )
@@ -254,7 +255,13 @@ def build_switch(config: BuildConfig, rebuild: bool) -> Path:
                 ],
             )
             run_step(
-                work, "nro", [sdk / "tools/bin/elf2nro", elf, config.artifact, f"--nacp={nacp}"]
+                work, "nro", [
+                    sdk / "tools/bin/elf2nro",
+                    elf,
+                    config.artifact,
+                    f"--nacp={nacp}",
+                    f"--icon={icon}",
+                ]
             )
     return config.artifact
 
