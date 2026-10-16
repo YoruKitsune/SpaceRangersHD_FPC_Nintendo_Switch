@@ -17,18 +17,44 @@ void sr_switch_touch_position(int x, int y) {
     touch_position = true;
 }
 int sr_switch_handheld(void) { return appletGetOperationMode() == AppletOperationMode_Handheld; }
+/* Two layers: the base layer is used as is; while ZL is held only the
+ * entries marked `zl` apply (ZL also slows the cursor and turns the right
+ * stick into the mouse wheel). */
 static const struct {
     uint64_t button;
     SDL_Scancode scan;
+    bool zl;
 } keys[] = {
-    {HidNpadButton_Plus, SDL_SCANCODE_ESCAPE},  {HidNpadButton_Minus, SDL_SCANCODE_TAB},
-    {HidNpadButton_X, SDL_SCANCODE_RETURN},     {HidNpadButton_Y, SDL_SCANCODE_SPACE},
-    {HidNpadButton_L, SDL_SCANCODE_LCTRL},      {HidNpadButton_R, SDL_SCANCODE_LSHIFT},
-    {HidNpadButton_Left, SDL_SCANCODE_LEFT},    {HidNpadButton_Up, SDL_SCANCODE_UP},
-    {HidNpadButton_Right, SDL_SCANCODE_RIGHT},  {HidNpadButton_Down, SDL_SCANCODE_DOWN},
-    {HidNpadButton_ZR, SDL_SCANCODE_BACKSPACE},
+    {HidNpadButton_Plus, SDL_SCANCODE_ESCAPE, false},    /* menu */
+    {HidNpadButton_B, SDL_SCANCODE_KP_5, false},         /* back / close (handled by the UI) */
+    {HidNpadButton_Minus, SDL_SCANCODE_F1, false},       /* journal */
+    {HidNpadButton_X, SDL_SCANCODE_RETURN, false},
+    {HidNpadButton_Y, SDL_SCANCODE_SPACE, false},        /* end turn */
+    {HidNpadButton_L, SDL_SCANCODE_S, false},            /* ship panel */
+    {HidNpadButton_R, SDL_SCANCODE_M, false},            /* galaxy map */
+    {HidNpadButton_ZR, SDL_SCANCODE_W, false},           /* weapons panel */
+    {HidNpadButton_Left, SDL_SCANCODE_KP_4, false},
+    {HidNpadButton_Up, SDL_SCANCODE_KP_8, false},
+    {HidNpadButton_Right, SDL_SCANCODE_KP_6, false},
+    {HidNpadButton_Down, SDL_SCANCODE_KP_2, false},
+    {HidNpadButton_StickRLeft, SDL_SCANCODE_LEFT, false}, /* map scroll */
+    {HidNpadButton_StickRUp, SDL_SCANCODE_UP, false},
+    {HidNpadButton_StickRRight, SDL_SCANCODE_RIGHT, false},
+    {HidNpadButton_StickRDown, SDL_SCANCODE_DOWN, false},
+    {HidNpadButton_Plus, SDL_SCANCODE_F11, true},        /* clear messages */
+    {HidNpadButton_Minus, SDL_SCANCODE_TAB, true},
+    {HidNpadButton_X, SDL_SCANCODE_I, true},             /* scanner */
+    {HidNpadButton_Y, SDL_SCANCODE_T, true},             /* talk */
+    {HidNpadButton_L, SDL_SCANCODE_R, true},             /* rangers/quests panel */
+    {HidNpadButton_R, SDL_SCANCODE_F, true},             /* afterburner */
+    {HidNpadButton_ZR, SDL_SCANCODE_GRAVE, true},        /* select all weapons */
+    {HidNpadButton_Left, SDL_SCANCODE_F2, true},         /* save menu */
+    {HidNpadButton_Right, SDL_SCANCODE_F3, true},        /* load menu */
+    {HidNpadButton_Up, SDL_SCANCODE_H, true},            /* turn film history */
+    {HidNpadButton_Down, SDL_SCANCODE_LSHIFT, true},
 };
-static const uint64_t mouse_buttons[] = {HidNpadButton_A, HidNpadButton_B};
+#define SR_RIGHT_CLICK (1ULL << 60) /* virtual: ZL + A */
+static const uint64_t mouse_buttons[] = {HidNpadButton_A, SR_RIGHT_CLICK};
 static struct {
     uint32_t tick;
     int x, y;
@@ -37,7 +63,7 @@ static struct {
 
 uint32_t sr_switch_mouse_buttons(void) {
     return ((held & HidNpadButton_A) ? SDL_BUTTON_LMASK : 0) |
-           ((held & HidNpadButton_B) ? SDL_BUTTON_RMASK : 0);
+           ((held & SR_RIGHT_CLICK) ? SDL_BUTTON_RMASK : 0);
 }
 const uint8_t *sr_switch_keyboard_state(void) { return keyboard; }
 
@@ -51,8 +77,11 @@ static uint32_t click_hint(const char *name, uint32_t fallback) {
 static void update_buttons(SDL_Window *window, uint64_t next, uint32_t now, int x, int y) {
     uint64_t changed = held ^ next;
     held = next;
+    bool layer = (held & HidNpadButton_ZL) != 0;
+    uint8_t wanted[SDL_NUM_SCANCODES] = {0};
     for (unsigned i = 0; i < SDL_arraysize(keys); ++i)
-        keyboard[keys[i].scan] = (held & keys[i].button) != 0;
+        if (keys[i].zl == layer && (held & keys[i].button))
+            wanted[keys[i].scan] = 1;
     for (unsigned i = 0; i < SDL_arraysize(mouse_buttons); ++i) {
         if (!(changed & mouse_buttons[i]))
             continue;
@@ -83,15 +112,17 @@ static void update_buttons(SDL_Window *window, uint64_t next, uint32_t now, int 
         SDL_PushEvent(&event);
     }
     for (unsigned i = 0; i < SDL_arraysize(keys); ++i) {
-        if (!(changed & keys[i].button))
+        SDL_Scancode scan = keys[i].scan;
+        if (keyboard[scan] == wanted[scan])
             continue;
+        keyboard[scan] = wanted[scan];
         SDL_Event event = {0};
-        bool pressed = keyboard[keys[i].scan] != 0;
+        bool pressed = keyboard[scan] != 0;
         event.type = pressed ? SDL_KEYDOWN : SDL_KEYUP;
         event.key.windowID = SDL_GetWindowID(window);
         event.key.state = pressed ? SDL_PRESSED : SDL_RELEASED;
-        event.key.keysym.scancode = keys[i].scan;
-        event.key.keysym.sym = SDL_GetKeyFromScancode(keys[i].scan);
+        event.key.keysym.scancode = scan;
+        event.key.keysym.sym = SDL_GetKeyFromScancode(scan);
         event.key.keysym.mod = (keyboard[SDL_SCANCODE_LCTRL] ? KMOD_LCTRL : 0) |
                                (keyboard[SDL_SCANCODE_LSHIFT] ? KMOD_LSHIFT : 0);
         SDL_PushEvent(&event);
@@ -167,6 +198,12 @@ void sr_switch_poll_input(SDL_Window *window) {
     blocked_buttons &= buttons;
     buttons &= ~blocked_buttons;
     down &= ~blocked_buttons;
+    if (buttons & HidNpadButton_ZL) {
+        if (buttons & HidNpadButton_A)
+            buttons = (buttons & ~HidNpadButton_A) | SR_RIGHT_CLICK;
+        if (down & HidNpadButton_A)
+            down = (down & ~HidNpadButton_A) | SR_RIGHT_CLICK;
+    }
     HidAnalogStickState left = padGetStickPos(&pad, 0);
     double dx = axis(left.x), dy = -axis(left.y);
     int width, height, x, y;
@@ -187,13 +224,16 @@ void sr_switch_poll_input(SDL_Window *window) {
     if (touch_position) {
         x = lround(cursor_x);
         y = lround(cursor_y);
-        if (down & (HidNpadButton_A | HidNpadButton_B)) {
+        if (down & (HidNpadButton_A | SR_RIGHT_CLICK)) {
             SDL_WarpMouseInWindow(window, x, y);
             touch_position = false;
         }
     }
     update_buttons(window, buttons, now, x, y);
-    scroll += axis(padGetStickPos(&pad, 1).y) * elapsed * 8;
+    if (buttons & HidNpadButton_ZL)
+        scroll += axis(padGetStickPos(&pad, 1).y) * elapsed * 8;
+    else
+        scroll = 0;
     if (fabs(scroll) >= 1) {
         int amount = (int)scroll;
         scroll -= amount;

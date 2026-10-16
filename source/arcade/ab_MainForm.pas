@@ -1103,7 +1103,7 @@ begin
     ArcadeAutopilotEnabled := False;
     UpdateAutopilotButtons;
   end
-  else if VirtualKey = VK_CONTROL then
+  else if (VirtualKey = VK_CONTROL) or (VirtualKey = Ord('W')) then
   begin
     PrimaryFireKeyDown := True;
     ArcadeLastInputTick := ArcadeTickCount;
@@ -1158,7 +1158,7 @@ begin
     ArcadeAutopilotEnabled := False;
     UpdateAutopilotButtons;
   end
-  else if VirtualKey = VK_CONTROL then
+  else if (VirtualKey = VK_CONTROL) or (VirtualKey = Ord('W')) then
   begin
     PrimaryFireKeyDown := False;
     ArcadeLastInputTick := ArcadeTickCount;

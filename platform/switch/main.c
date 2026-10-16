@@ -48,6 +48,16 @@ int main(int argc, char **argv) {
     }
     /* Keep the load address beside crash logs for offline ELF symbolization. */
     fprintf(stderr, "Space Rangers HD: module=%p\n", _start);
+    {
+        extern char *fake_heap_start, *fake_heap_end;
+        AppletType type = appletGetAppletType();
+        fprintf(stderr, "launch: argc=%d argv0=%s applet_type=%d (%s) heap=%lu MiB\n", argc,
+                argc > 0 ? argv[0] : "(none)", (int)type,
+                (type == AppletType_Application || type == AppletType_SystemApplication)
+                    ? "application mode"
+                    : "applet mode: memory may be insufficient, launch hbmenu/Sphaira via title takeover",
+                (unsigned long)(((uintptr_t)fake_heap_end - (uintptr_t)fake_heap_start) >> 20));
+    }
     fsync(fileno(stderr));
     return fpc_nx_run(argc, argv);
 }

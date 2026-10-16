@@ -2382,6 +2382,148 @@ begin
   Result := FindTouchPressOwner(FindTouchControl(Root, Point));
 end;
 
+{$IFDEF SWITCH}
+const
+  // The Switch gamepad sends the D-pad as numpad 2/4/6/8, leaving the arrow
+  // keys free for map scrolling (left stick).
+  VK_PadDown = 98;
+  VK_PadLeft = 100;
+  VK_PadRight = 102;
+  VK_PadUp = 104;
+  VK_PadBack = 101;
+
+type
+  TPadNavigationGI = record
+    Key: Cardinal;
+    Origin: TPoint;
+    OriginControl: TObjectGI;
+    BestScore: Double;
+    Best: TObjectGI;
+  end;
+
+procedure CollectPadTargets(Control: TObjectGI; var Nav: TPadNavigationGI);
+var
+  Child: TObjectGI;
+  Center: TPoint;
+  DX, DY, Forward, Side, Score: Double;
+begin
+  if (Control = nil) or not Control.Active then
+    Exit;
+  if ((Control.GetTouchInteraction in [tiTap, tiHold])
+          or Assigned(Control.LeftButtonDownCallback)
+          or Assigned(Control.LeftButtonUpCallback))
+      and not Control.HitTestDisabled
+      and (Control.ClientSize.X > 0) and (Control.ClientSize.Y > 0)
+      and (Control.ClientSize.X * 3 < GameScreenWidth * 2)
+      and (Control.ClientSize.Y * 3 < GameScreenHeight * 2) then
+  begin
+    with Control.HitTestBounds do
+      Center := Classes.Point((Left + Right) div 2, (Top + Bottom) div 2);
+    if Control.ContainsPoint(Nav.Origin) and not Control.IsOccludedAtPoint(Nav.Origin) then
+      Nav.OriginControl := Control
+    else if (Center.X >= 0) and (Center.Y >= 0) and (Center.X < GameScreenWidth)
+        and (Center.Y < GameScreenHeight) and not Control.IsOccludedAtPoint(Center) then
+    begin
+      DX := Center.X - Nav.Origin.X;
+      DY := Center.Y - Nav.Origin.Y;
+      case Nav.Key of
+        VK_PadLeft: begin Forward := -DX; Side := DY; end;
+        VK_PadRight: begin Forward := DX; Side := DY; end;
+        VK_PadUp: begin Forward := -DY; Side := DX; end;
+      else
+        begin Forward := DY; Side := DX; end;
+      end;
+      if Forward > 4 then
+      begin
+        Score := Forward + 2 * Abs(Side);
+        if (Nav.Best = nil) or (Score < Nav.BestScore) then
+        begin
+          Nav.Best := Control;
+          Nav.BestScore := Score;
+        end;
+      end;
+    end;
+  end;
+  Child := Control.FirstChild;
+  while Child <> nil do
+  begin
+    CollectPadTargets(Child, Nav);
+    Child := Child.NextSibling;
+  end;
+end;
+
+// Moves the pointer to the nearest clickable control in the pressed direction.
+procedure NavigateWithPad(Root: TObjectGI; Key: Cardinal);
+var
+  Nav: TPadNavigationGI;
+  Point: TPoint;
+begin
+  GetGameMouse(Point);
+  Nav.Key := Key;
+  Nav.Origin := Point;
+  Nav.OriginControl := nil;
+  Nav.Best := nil;
+  Nav.BestScore := 0;
+  CollectPadTargets(Root, Nav);
+  if Nav.OriginControl <> nil then
+  begin
+    // Measure from the control under the pointer, not from wherever in it the pointer sits.
+    with Nav.OriginControl.HitTestBounds do
+      Nav.Origin := Classes.Point((Left + Right) div 2, (Top + Bottom) div 2);
+    Nav.Best := nil;
+    CollectPadTargets(Root, Nav);
+  end;
+  if Nav.Best <> nil then
+    with Nav.Best.HitTestBounds do
+      WarpGameMouse((Left + Right) div 2, (Top + Bottom) div 2);
+  if Nav.Best <> nil then
+    WriteLn(ErrOutput, 'pad nav key=', Key, ' from=', Point.X, ',', Point.Y, ' to=',
+        string(Nav.Best.ControlName), ' ', string(Nav.Best.ClassName))
+  else
+    WriteLn(ErrOutput, 'pad nav key=', Key, ' from=', Point.X, ',', Point.Y, ' to=none');
+end;
+
+function IsCloseButtonName(const Name: WideString): Boolean;
+const
+  Names: array[0..11] of WideString = (
+      'ButClose', 'Close', 'ButFormClose', 'Cancel', 'Exit', 'ButExit', 'ButCancel',
+      'ButtonExit', 'ExitRH', 'PF_Exit', 'InfoExit', 'ButCloseExt');
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := Low(Names) to High(Names) do
+    if SameText(Name, Names[Index]) then
+      Exit(True);
+end;
+
+function FindCloseButton(Control: TObjectGI): TObjectGI;
+var
+  Child: TObjectGI;
+  Center: TPoint;
+begin
+  Result := nil;
+  if (Control = nil) or not Control.Active then
+    Exit;
+  if IsCloseButtonName(Control.ControlName) and not Control.HitTestDisabled
+      and (Control.ClientSize.X > 0) and (Control.ClientSize.Y > 0) then
+  begin
+    with Control.HitTestBounds do
+      Center := Classes.Point((Left + Right) div 2, (Top + Bottom) div 2);
+    if not Control.IsOccludedAtPoint(Center) then
+      Exit(Control);
+  end;
+  Child := Control.FirstChild;
+  while Child <> nil do
+  begin
+    Result := FindCloseButton(Child);
+    if Result <> nil then
+      Exit;
+    Child := Child.NextSibling;
+  end;
+end;
+{$ENDIF}
+
 procedure TMessageLoopGI.ProcessWindowMessage(Message, WParam: Cardinal; LParam: Integer);
 var
   Point: TPoint;
@@ -2391,6 +2533,7 @@ var
   NewOffset: TPoint;
   DX, DY, Scale: Double;
   TouchControl: TObjectGI;
+  Target: TObjectGI;
 
   procedure ConvertMousePointToViewport; { Nested ProcessWindowMessage helper; scales or offsets its captured mouse point. }
   begin
@@ -2806,6 +2949,33 @@ begin
         FocusedControl.ProcessCharacter(WideChar(WParam));
       end;
     end
+{$IFDEF SWITCH}
+    else if (Message = WM_KEYDOWN)
+        and ((WParam = VK_PadDown) or (WParam = VK_PadLeft) or (WParam = VK_PadRight) or (WParam = VK_PadUp)) then
+      NavigateWithPad(RootUiObject, WParam)
+    else if (Message = WM_KEYDOWN) and (WParam = VK_PadBack) then
+    begin
+      Target := FindCloseButton(RootUiObject);
+      if Target <> nil then
+      begin
+        with Target.HitTestBounds do
+          Point := Classes.Point((Left + Right) div 2, (Top + Bottom) div 2);
+        WriteLn(ErrOutput, 'pad back: click ', string(Target.ControlName), ' ', string(Target.ClassName));
+        RootUiObject.ProcessMouseMove(0, Point);
+        RootUiObject.ProcessLeftButtonDown(MK_LBUTTON, Point);
+        RootUiObject.ProcessLeftButtonUp(0, Point);
+      end
+      else if (RootUiObject.FindByNameRecursive('MapControls') <> nil)
+          or (RootUiObject.FindByNameRecursive('PanelWinHide') <> nil) then
+        WriteLn(ErrOutput, 'pad back: ignored on the main map / arcade battle')
+      else
+      begin
+        WriteLn(ErrOutput, 'pad back: Esc');
+        ProcessWindowMessage(WM_KEYDOWN, VK_ESCAPE, 0);
+        ProcessWindowMessage(WM_KEYUP, VK_ESCAPE, 0);
+      end;
+    end
+{$ENDIF}
     else if (Message = WM_KEYDOWN) or ((Message = WM_SYSKEYDOWN) and (WParam in [VK_MENU, VK_LEFT..VK_DOWN, VK_F5])) then
     begin
       Stage := 31;
