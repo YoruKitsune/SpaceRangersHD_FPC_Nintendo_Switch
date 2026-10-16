@@ -1,3 +1,53 @@
+# Space Rangers HD — Nintendo Switch
+
+Неофициальный homebrew-порт **Space Rangers HD: A War Apart** («Космические рейнджеры HD») на Nintendo Switch.
+Это форк [pakompom/SpaceRangersHD_FPC](https://github.com/pakompom/SpaceRangersHD_FPC) (порт на Free Pascal)
+с доработками для консоли. Проект не связан с разработчиками и издателем игры. **Игровые файлы не распространяются**,
+нужна собственная лицензионная копия.
+
+## Благодарности
+
+- **pakompom**: автор порта на Free Pascal ([SpaceRangersHD_FPC](https://github.com/pakompom/SpaceRangersHD_FPC)) и реконструкции исходников
+  ([SpaceRangersHD_decomp](https://github.com/pakompom/SpaceRangersHD_decomp)). Весь этот проект стоит на их работе, спасибо!
+- Разработчики игры: SNK Games, Elemental Games, Katauri Interactive. Издатель: Fulqrum Publishing.
+- KIaxons ([Utility-Functions-Pack](https://github.com/KIaxons/Utility-Functions-Pack)), авторы ExpAutoSearch,
+  [giantplaceholder](https://github.com/giantplaceholder/spacerangershd-fpc-fixes), OKGF, SDL, Xiph, Xvid, Free Pascal,
+  devkitPro/libnx. Полный список и лицензии: [NOTICE.md](NOTICE.md), [LICENSE](LICENSE).
+
+## Что добавлено для Switch
+
+- Иконка и NACP для hbmenu/Sphaira.
+- Раскладка геймпада: панели игры на кнопках, второй слой по ZL, стики (курсор и камера), ПКМ на ZL+A.
+- Навигация по меню D-pad (курсор прыгает на ближайшую кнопку), B закрывает окна.
+- Стрельба основным оружием в аркадных боях на ZR.
+- Диагностика в `user/stderr.log` (режим запуска, память, навигация).
+- Docker-сборка: `switch/docker/`.
+
+## Статус и ограничения
+
+- Проверялось владельцем форка на консоли, но не всё; возможны вылеты (в том числе при запуске из Sphaira).
+- AVI-ролики отключены; бои роботов не подключены (планетарные бои засчитываются как победа).
+- Остальные платформы исходного проекта сохранены, см. [BUILDING.md](BUILDING.md).
+
+## Документация
+
+- [Установка](docs/INSTALL.md)
+- [Сборка](docs/BUILD.md)
+- [Управление](docs/CONTROLS.md)
+- [Проблемы и логи](docs/TROUBLESHOOTING.md)
+
+## English
+
+Unofficial Nintendo Switch homebrew port of *Space Rangers HD: A War Apart*, a fork of
+[pakompom/SpaceRangersHD_FPC](https://github.com/pakompom/SpaceRangersHD_FPC) with a Switch icon, gamepad layout, D-pad
+menu navigation, B-to-close and an arcade fire button. Put `Rangers.nro` in `sdmc:/switch/SpaceRangersHD/` and your own
+copy of the game in `sdmc:/switch/SpaceRangersHD/game/`; launch homebrew in application mode (title takeover).
+See `docs/`. Game files are not included and not distributed. Thanks to pakompom for the FPC port and the reconstructed source.
+
+---
+
+## Upstream README (unchanged below)
+
 # Space Rangers HD — Free Pascal Port
 
 An experimental Free Pascal port of **Space Rangers HD: A War Apart**, based on the

@@ -34,3 +34,6 @@ their respective licenses.
 Custom additions and modifications made for this FPC port are licensed under
 the [MIT license](LICENSE). The underlying game decompilation retains its
 existing terms.
+
+Nintendo Switch additions in this fork (icon, gamepad layout, menu navigation, Docker build files,
+documentation) are licensed under the [MIT license](LICENSE) as well.
